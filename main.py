@@ -1,8 +1,25 @@
 from typing import *
 import mysql.connector
-import prompt_toolkit
+import prompt_toolkit as pt
 import datetime
 import traceback
+
+profile = {}
+
+def handler(v):
+    pt.application.get_app().exit(result = v)
+
+def getProfile(id):
+    cursor = connection.cursor()
+    cursor.execute("select id, name, password, address from student where student.id = %s", (id, ))
+    values = cursor.fetchall()
+    cursor.close()
+    return {
+        "id": values[0][0],
+        "name": values[0][1],
+        "password": values[0][2],
+        "address": values[0][3],
+    }
 
 def main():
     cursor = connection.cursor()
@@ -11,38 +28,38 @@ def main():
     values = cursor.fetchall()
     cursor.close()
     print(values)
+    showLoginView()
 
-    profile = {}
-
-    # login view
+# login view
+def showLoginView():
     while True:
-        # username = prompt_toolkit.shortcuts.input_dialog(
-        #     title="NU Login",
-        #     text="Username",
-        #     cancel_text="Quit"
-        # )
-        # if username == None:
-        #     exit()
+        username = pt.shortcuts.input_dialog(
+            title="NU Login",
+            text="Username",
+            cancel_text="Quit"
+        )
+        if username == None:
+            exit()
 
-        # password = prompt_toolkit.shortcuts.input_dialog(
-        #     title="NU Login",
-        #     text="Password",
-        #     password=True
-        # )
-        # if password == None:
-        #     continue
-        username = "Linda Smith"
-        password = "lunch"
+        password = pt.shortcuts.input_dialog(
+            title="NU Login",
+            text="Password",
+            password=True
+        )
+        if password == None:
+            continue
+        # username = "Linda Smith"
+        # password = "lunch"
 
         cursor = connection.cursor()
-        cursor.execute("select id, name, password from student where student.name = %s and student.password = %s", (username, password))
+        cursor.execute("select id, name, password, address from student where student.name = %s and student.password = %s", (username, password))
         values = cursor.fetchall()
         cursor.close()
         if len(values) == 0:
-            prompt_toolkit.shortcuts.message_dialog(
+            pt.shortcuts.message_dialog(
                 title = "NU Login",
                 text = "Wrong username or password",
-                style = prompt_toolkit.styles.Style.from_dict({
+                style = pt.styles.Style.from_dict({
                     "dialog": "bg:#ff0000",
                 }),
             )
@@ -51,8 +68,168 @@ def main():
             profile["id"] = values[0][0]
             profile["username"] = values[0][1]
             profile["password"] = values[0][2]
+            profile["address"] = values[0][3]
             print(profile)
-            break
+            showStudentMenu() # enter student menu
+            exit()
+
+# student menu
+def showStudentMenu():
+    while True:
+        cursor = connection.cursor()
+        cursor.execute("select uosCode, semester, year, grade from transcript where studId = %s", (profile["id"], ))
+        values = cursor.fetchall()
+        print(values)
+        cursor.close()
+        today = datetime.date.today()
+        courses = list(map(lambda v: (
+            v[0],
+            v[0] + "    " + v[1] + "    " + str(v[2]) + "   " + str(v[3])
+        ), values))
+
+        # build gui
+
+        radioList = pt.widgets.RadioList(courses)
+        actions = pt.layout.HSplit([
+            pt.widgets.Button("Transcript", lambda: handler("transcript")),
+            pt.widgets.Button("Enroll", lambda: handler("enroll")),
+            pt.widgets.Button("Withdraw", lambda: handler("withdraw")),
+            pt.widgets.Button("Personal Details", lambda: handler("profile"), width = 20),
+            pt.widgets.Button("Log out", lambda: handler("logout"))
+        ])
+        layout = pt.layout.VSplit([
+            radioList,
+            actions
+        ], padding = 1)
+        dialog = pt.shortcuts.dialogs.Dialog(
+            title = "Welcome, %s. Today is %d-%d-%d" % (profile["username"], today.year, today.month, today.day),
+            body = layout,
+            with_background=True)
+
+        answer = pt.shortcuts.dialogs._run_dialog(dialog, None)
+        print(answer)
+        if answer == None:
+            return
+        elif answer == "transcript":
+            showTranscript()
+        elif answer == "enroll":
+            showEnrolment()
+        elif answer == "profile":
+            showProfile()
+        else:
+            return
+
+def showTranscript():
+    while True:
+        cursor = connection.cursor()
+        cursor.execute("select uosCode, semester, year, grade from transcript where studId = %s", (profile["id"], ))
+        values = cursor.fetchall()
+        print(values)
+        cursor.close()
+        today = datetime.date.today()
+        courses = list(map(lambda v: (
+            v[0],
+            v[0] + "    " + v[1] + "    " + str(v[2]) + "   " + str(v[3])
+        ), values))
+
+        answer = pt.shortcuts.radiolist_dialog(
+            title = "%s's transcript" % profile["username"],
+            text = "Select course to see details",
+            ok_text = "See detail",
+            cancel_text = "Return",
+            values = courses
+        )
+
+        if answer == None:
+            return
+        else:
+            showCourseDetail(answer)
+
+def showCourseDetail(courseId: str):
+    print(courseId)
+    cursor = connection.cursor()
+    cursor.execute("""
+        select uosName
+        from unitofstudy
+        where uosCode = %s
+    """, (courseId, ))
+    courseName, = cursor.fetchall()[0]
+
+    cursor.execute("""
+        select semester, year, grade
+        from transcript
+        where studId = %s and uosCode = %s
+    """, (profile["id"], courseId))
+    semester, year, grade = cursor.fetchall()[0]
+
+    cursor.execute("""
+        select uosoffering.enrollment, uosoffering.maxEnrollment, faculty.name
+        from uosoffering, faculty
+        where uosoffering.uosCode = %s and uosoffering.semester = %s and uosoffering.year = %s and uosoffering.instructorId = faculty.id
+    """, (courseId, semester, year))
+    enrollment, maxEnrollment, instructorName = cursor.fetchall()[0]
+
+    cursor.close()
+
+    print(courseId, courseName, year, semester, enrollment, maxEnrollment, instructorName)
+
+    answer = pt.shortcuts.message_dialog(
+        title = "%s: %s" % (courseId, courseName),
+        text = pt.HTML("""
+            <b>course id</b> %s \n
+            <b>course name</b> %s \n
+            <b>year</b> %d \n
+            <b>semester</b> %s \n
+            <b>enrollment</b> %d \n
+            <b>max enrollment</b> %d \n
+            <b>instructor name</b> %s \n
+            <b>grade</b> %s
+        """ % (courseId, courseName, year, semester, enrollment, maxEnrollment, instructorName, grade if grade else "N/A"))
+    )
+    return
+
+def showEnrolment():
+    pass
+
+def showWithdraw():
+    pass
+
+def showProfile():
+    profile.update(getProfile(profile["id"]))
+    text = pt.HTML("""
+        <b>student id</b> %s \n
+        <b>name</b> %s \n
+        <b>address</b> %s \n
+        <b>password</b> %s \n
+    """ % (profile["id"], profile["username"], profile["address"], profile["password"]))
+    actions = pt.layout.HSplit([
+        pt.widgets.Button("Change address", lambda: handler("address"), 20),
+        pt.widgets.Button("Change password", lambda: handler("password"), 20),
+        pt.widgets.Button("Return", lambda: handler("return")),
+    ])
+    layout = pt.layout.VSplit([
+        pt.widgets.Label(text),
+        actions,
+    ], padding = 1)
+    dialog = pt.shortcuts.dialogs.Dialog(
+        title = "Peronsal details",
+        body = layout,
+        with_background=True
+    )
+    answer = pt.shortcuts.dialogs._run_dialog(dialog, None)
+
+    if answer == "address":
+        newAddress = pt.shortcuts.input_dialog(
+            title = "Change address",
+            text = "New address",
+        )
+    elif answer == "password":
+        newPassword = pt.shortcuts.input_dialog(
+            title = "Change password",
+            text = "New password",
+        )
+    else:
+        return
 
 if __name__ == "__main__":
     try:
