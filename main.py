@@ -5,6 +5,7 @@ import datetime
 import traceback
 
 profile = {}
+cur = []
 
 def handler(v):
     pt.application.get_app().exit(result = v)
@@ -27,7 +28,7 @@ def main():
     cursor.execute("select * from student")
     values = cursor.fetchall()
     cursor.close()
-    print(values)
+    #print(values)
     showLoginView()
 
 # login view
@@ -54,7 +55,9 @@ def showLoginView():
         cursor = connection.cursor()
         cursor.execute("select id, name, password, address from student where student.name = %s and student.password = %s", (username, password))
         values = cursor.fetchall()
+        #print(values)
         cursor.close()
+        
         if len(values) == 0:
             pt.shortcuts.message_dialog(
                 title = "NU Login",
@@ -77,11 +80,21 @@ def showLoginView():
 def showStudentMenu():
     while True:
         cursor = connection.cursor()
-        cursor.execute("select uosCode, semester, year, grade from transcript where studId = %s", (profile["id"], ))
+        cursor.execute("""
+                    select distinct temp1.uosCode, temp1.semester, temp1.year, temp1.grade
+                    from
+                    (select uosCode, semester, year, grade
+                    from transcript
+                    where studId = %s and grade is null)temp1,
+                    (select uosCode, semester, year, grade
+                    from transcript
+                    where studId = %s and grade is null)temp2
+                    where temp1.year > temp2.year
+                    and temp1.semester > temp2.semester""", (profile["id"], profile["id"],))
         values = cursor.fetchall()
         print(values)
         cursor.close()
-        today = datetime.date.today()
+        #today = datetime.date.today()
         courses = list(map(lambda v: (
             v[0],
             v[0] + "    " + v[1] + "    " + str(v[2]) + "   " + str(v[3])
@@ -102,12 +115,14 @@ def showStudentMenu():
             actions
         ], padding = 1)
         dialog = pt.shortcuts.dialogs.Dialog(
-            title = "Welcome, %s. Today is %d-%d-%d" % (profile["username"], today.year, today.month, today.day),
+            title = "Welcome, %s. Today is %s-%s semester" % (profile["username"], values[0][2], values[0][1]),
             body = layout,
             with_background=True)
 
         answer = pt.shortcuts.dialogs._run_dialog(dialog, None)
-        print(answer)
+        #print(answer)
+        #cur = [year, semester]
+        cur = [values[0][2], values[0][1]]
         if answer == None:
             return
         elif answer == "transcript":
@@ -124,14 +139,15 @@ def showTranscript():
         cursor = connection.cursor()
         cursor.execute("select uosCode, semester, year, grade from transcript where studId = %s", (profile["id"], ))
         values = cursor.fetchall()
-        print(values)
+        #print(values)
         cursor.close()
         today = datetime.date.today()
         courses = list(map(lambda v: (
             v[0],
             v[0] + "    " + v[1] + "    " + str(v[2]) + "   " + str(v[3])
         ), values))
-
+        
+        
         answer = pt.shortcuts.radiolist_dialog(
             title = "%s's transcript" % profile["username"],
             text = "Select course to see details",
@@ -139,11 +155,13 @@ def showTranscript():
             cancel_text = "Return",
             values = courses
         )
-
+        #print(answer)
         if answer == None:
             return
         else:
             showCourseDetail(answer)
+        
+        
 
 def showCourseDetail(courseId: str):
     print(courseId)
@@ -227,13 +245,30 @@ def showProfile():
         newPassword = pt.shortcuts.input_dialog(
             title = "Change password",
             text = "New password",
+            cancel_text = 'Cancel', 
         )
+        if newPassword == None:
+            pt.shortcuts.message_dialog(
+                title = "New Password",
+                text = "Password update failed",
+                style = pt.styles.Style.from_dict(
+                    {"dialog":"bg:#ff0000",
+                     }),
+                )
+        cursor = connection.cursor()
+        cursor.execute("""
+            update student
+            set password = %s
+            where id = %s
+        """, (newPassword, profile["id"]))
+        connection.commit()
+        cursor.close()
     else:
         return
 
 if __name__ == "__main__":
     try:
-        connection = mysql.connector.connect(user="root", password="19961226syc", database="project3-nudb", host="localhost", port=3306)
+        connection = mysql.connector.connect(user="root", password="294811", database="project3-nudb", host="localhost", port=3306)
         main()
     except:
         traceback.print_exc()
