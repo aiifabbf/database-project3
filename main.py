@@ -5,7 +5,7 @@ import datetime
 import traceback
 
 profile = {}
-cur = []
+cur = {}
 
 def handler(v):
     pt.application.get_app().exit(result = v)
@@ -72,7 +72,8 @@ def showLoginView():
             profile["username"] = values[0][1]
             profile["password"] = values[0][2]
             profile["address"] = values[0][3]
-            print(profile)
+            cur = {}
+            #print(profile)
             showStudentMenu() # enter student menu
             exit()
 
@@ -115,20 +116,23 @@ def showStudentMenu():
             actions
         ], padding = 1)
         dialog = pt.shortcuts.dialogs.Dialog(
-            title = "Welcome, %s. Today is %s-%s semester" % (profile["username"], values[0][2], values[0][1]),
+            title = "Welcome, %s. Today is %s-%s Semester" % (profile["username"], values[0][2], values[0][1]),
             body = layout,
             with_background=True)
 
         answer = pt.shortcuts.dialogs._run_dialog(dialog, None)
         #print(answer)
         #cur = [year, semester]
-        cur = [values[0][2], values[0][1]]
+        #cur = [values[0][2], values[0][1]]
+        cur['year'] = values[0][2]
+        cur['semester'] = values[0][1]
+        
         if answer == None:
             return
         elif answer == "transcript":
             showTranscript()
         elif answer == "enroll":
-            showEnrolment()
+            showEnrollment()
         elif answer == "profile":
             showProfile()
         else:
@@ -206,8 +210,154 @@ def showCourseDetail(courseId: str):
     )
     return
 
-def showEnrolment():
-    pass
+def showEnrollment():
+    print(cur)
+    if cur['semester'] == "Q2":
+        tempy = cur['year'] + 1
+        tempq = "Q1"
+    elif cur['semester'] == "Q1":
+        tempy = cur['year']
+        tempq = "Q2"
+    while True:
+        cursor = connection.cursor()
+        cursor.execute("""
+                select *
+                from lecture
+                where (year = %s and semester = %s)
+                or (year = %s and semester = %s)""",  \
+                (cur['year'], cur['semester'], tempy, tempq, ))
+        values = cursor.fetchall()
+        #print(values)
+        cursor.close()
+        #today = datetime.date.today()
+        courses = list(map(lambda v: (
+            v[0],
+            v[0] + "    " + v[1] + "    " + str(v[2]) + "   " + str(v[3]) + "   " + str(v[4])
+        ), values))
+        
+        
+        answer = pt.shortcuts.radiolist_dialog(
+            title = "%s-%s Lecture" % (cur['year'], cur['semester']),
+            text = "Lectures available for this and next semester are listed",
+            ok_text = "Select",
+            cancel_text = "Return",
+            values = courses
+        )
+        #print(answer)
+        if answer == None:
+            return
+        else:
+            #print(answer)
+            confirm = pt.shortcuts.yes_no_dialog(
+                title = 'Confirm',
+                text = 'Do you want to select %s?' % (answer, ))
+            
+            if confirm:
+                #Judge Duplicate
+                cursor = connection.cursor()
+                cursor.execute("""
+                    select *
+                    from transcript
+                    where studID = %s
+                    and uoscode = %s""",  \
+                    (profile['id'], answer ))
+                judge1 = cursor.fetchall()
+                cursor.close()
+                
+                if len(judge1) != 0:
+                    pt.shortcuts.message_dialog(
+                    title = "Lecture Selection Failed",
+                    text = "Cannot Select Duplicate Lectures!",
+                    style = pt.styles.Style.from_dict({
+                    "dialog": "bg:#ff0000",
+                    }),)
+                    continue
+                
+                #Judge prerequsite
+                cursor = connection.cursor()
+                cursor.execute("""
+                    select transcript.uoscode
+                    from transcript, requires
+                    where requires.uoscode = %s
+                    and studID = %s
+                    and requires.prerequoscode = transcript.uoscode
+                    and transcript.grade is not null""",  \
+                    (answer, profile['id'], ))
+                pre = cursor.fetchall()
+                #print(pre)
+
+                cursor.execute("""
+                    select requires.prerequoscode
+                    from requires
+                    where requires.uoscode = %s""",  \
+                    (answer, ))
+                req = cursor.fetchall()
+                #print(req)
+                cursor.close()
+                
+                if len(pre) < len(req):
+                    reqmsg = ''
+                    for cl in req:
+                        reqmsg += str(cl).replace("("," ").replace(")","").replace(","," ")
+                    pt.shortcuts.message_dialog(
+                    title = "Lecture Selection Failed",
+                    text = "To Select %s, You Should Complete%s First!" % (answer, reqmsg, ),
+                    style = pt.styles.Style.from_dict({
+                    "dialog": "bg:#ff0000",
+                    }),)
+                    continue
+                
+                #Judge maxenrollment
+                cursor = connection.cursor()
+                cursor.execute("""
+                    select enrollment, maxenrollment
+                    from uosoffering
+                    where uoscode = %s
+                    and year = %s
+                    and semester = %s""",  \
+                    (answer, cur['year'], cur['semester']))
+                judge3 = cursor.fetchall()
+                cursor.close()
+                print(judge3)
+
+                if judge3[0][0] >= judge3[0][1]:
+                    pt.shortcuts.message_dialog(
+                    title = "Lecture Selection Failed",
+                    text = "%s is Full Now(%s/%s)!" % (answer, judge3[0][0], judge3[0][1]),
+                    style = pt.styles.Style.from_dict({
+                    "dialog": "bg:#ff0000",
+                    }),)
+                    continue
+                #All cases passed, now update information
+                print(cur['year'], cur['semester'])
+                cursor = connection.cursor()
+                #insert into transcript
+                cursor.execute("""
+                    insert into transcript
+                    values(%s,%s,%s,%s,null)""",  \
+                    (profile['id'], answer, cur['semester'], cur['year']))
+                connection.commit()
+                #update enrollment
+                cursor.execute("""
+                    update uosoffering
+                    set enrollment = enrollment + 1
+                    where uoscode = %s
+                    and year = %s
+                    and semester = %s""",  \
+                    (answer, cur['year'], cur['semester']))
+                connection.commit()
+                cursor.close()
+
+                pt.shortcuts.message_dialog(
+                title = "Lecture Selection Succeed",
+                text = "Congratulations! You Have Selected %s Succesfully!" % (answer, ),
+                style = pt.styles.Style.from_dict({
+                "dialog": "bg:#00ff00",
+                }),)
+                continue
+            
+            pass
+            
 
 def showWithdraw():
     pass
