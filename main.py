@@ -257,10 +257,10 @@ def showEnrollment():
             if confirm:
                 p_out = 0
                 cursor = connection.cursor()
-                '''
+                
                 cursor.execute("""
-                DELIMITER //
-                drop procedure if exists check_enroll//
+                drop procedure if exists check_enroll""")
+                cursor.execute("""
                 create procedure check_enroll(out p_out int, in lec_code char(8), in stu_id int,
                                                                           in year_in int, in semester_in char(2))
                 begin
@@ -314,9 +314,8 @@ def showEnrollment():
                           and semester = semester_in;
                   end if;
                   select @p_out;
-                  end//
-                  DELIMITER ;""")
-                '''
+                  end""")
+                
                 args = (p_out, answer, profile['id'], cur['year'], cur['semester'])
                 args = cursor.callproc(
                 'check_enroll', args)
@@ -437,9 +436,10 @@ def showWithdraw():
                 text = 'Do you want to withdraw %s?' % (answer, ))
             
             if confirm:
-                '''
-                DELIMITER //
-                drop procedure if exists check_withdraw//
+                cursor = connection.cursor()
+                cursor.execute("""
+                drop procedure if exists check_withdraw""")
+                cursor.execute("""
                 create procedure check_withdraw(in lec_code char(8), in stu_id int,
                                                                           in year_in int, in semester_in char(2))
                 begin
@@ -452,10 +452,7 @@ def showWithdraw():
                           where uoscode = lec_code
                           and year = year_in
                           and semester = semester_in;
-                  end//
-                  DELIMITER ;
-                '''
-                cursor = connection.cursor()
+                end""")
                 args = (answer, profile['id'], cur['year'], cur['semester'])
                 args = cursor.callproc(
                 'check_withdraw', args)
@@ -505,7 +502,7 @@ def showProfile():
             set address = %s
             where id = %s
         """, (newAddress, profile["id"]))
-        connection.commit()
+        #connection.commit()
         cursor.close()
     elif answer == "password":
         newPassword = pt.shortcuts.input_dialog(
@@ -527,7 +524,7 @@ def showProfile():
             set password = %s
             where id = %s
         """, (newPassword, profile["id"]))
-        connection.commit()
+        #connection.commit()
         cursor.close()
     else:
         return
