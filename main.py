@@ -135,6 +135,8 @@ def showStudentMenu():
             showEnrollment()
         elif answer == "profile":
             showProfile()
+        elif answer == "withdraw":
+            showWithdraw()
         else:
             return
 
@@ -211,7 +213,7 @@ def showCourseDetail(courseId: str):
     return
 
 def showEnrollment():
-    print(cur)
+    #print(cur)
     if cur['semester'] == "Q2":
         tempy = cur['year'] + 1
         tempq = "Q1"
@@ -394,7 +396,78 @@ def showEnrollment():
             
 
 def showWithdraw():
-    pass
+    while True:
+        cursor = connection.cursor()
+        cursor.execute("""
+                    select distinct temp1.uosCode, temp1.semester, temp1.year, temp1.grade
+                    from
+                    (select uosCode, semester, year, grade
+                    from transcript
+                    where studId = %s and grade is null)temp1,
+                    (select uosCode, semester, year, grade
+                    from transcript
+                    where studId = %s and grade is null)temp2
+                    where temp1.year > temp2.year
+                    and temp1.semester > temp2.semester""", (profile["id"], profile["id"],))
+        values = cursor.fetchall()
+
+        print(values)
+        cursor.close()
+        #today = datetime.date.today()
+        courses = list(map(lambda v: (
+            v[0],
+            v[0] + "    " + v[1] + "    " + str(v[2]) + "   " + str(v[3])
+        ), values))
+        
+        
+        answer = pt.shortcuts.radiolist_dialog(
+            title = "%s-%s Lecture" % (cur['year'], cur['semester']),
+            text = "Lectures you have chosen for this semester are listed",
+            ok_text = "Withdraw",
+            cancel_text = "Return",
+            values = courses
+        )
+        #print(answer)
+        if answer == None:
+            return
+        else:
+            #print(answer)
+            confirm = pt.shortcuts.yes_no_dialog(
+                title = 'Confirm',
+                text = 'Do you want to withdraw %s?' % (answer, ))
+            
+            if confirm:
+                '''
+                DELIMITER //
+                drop procedure if exists check_withdraw//
+                create procedure check_withdraw(in lec_code char(8), in stu_id int,
+                                                                          in year_in int, in semester_in char(2))
+                begin
+                      delete from transcript
+                          where StudId = stu_id and UoSCode = lec_code
+                      and Semester = semester_in and year = year_in;
+                      
+                      update uosoffering
+                          set enrollment = enrollment - 1
+                          where uoscode = lec_code
+                          and year = year_in
+                          and semester = semester_in;
+                  end//
+                  DELIMITER ;
+                '''
+                cursor = connection.cursor()
+                args = (answer, profile['id'], cur['year'], cur['semester'])
+                args = cursor.callproc(
+                'check_withdraw', args)
+                #connection.commit()
+                #trigger
+                cursor.close()
+                pt.shortcuts.message_dialog(
+                    title = "Lecture Withdraw Succeed",
+                    text = "Congratulations! You Have Withdrawn %s Succesfully!" % (answer, ),
+                    style = pt.styles.Style.from_dict({
+                    "dialog": "bg:#00ff00",
+                    }),)
 
 def showProfile():
     profile.update(getProfile(profile["id"]))
