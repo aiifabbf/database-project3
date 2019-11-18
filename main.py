@@ -253,18 +253,78 @@ def showEnrollment():
                 text = 'Do you want to select %s?' % (answer, ))
             
             if confirm:
-                #Judge Duplicate
+                p_out = 0
                 cursor = connection.cursor()
+                '''
                 cursor.execute("""
-                    select *
-                    from transcript
-                    where studID = %s
-                    and uoscode = %s""",  \
-                    (profile['id'], answer ))
-                judge1 = cursor.fetchall()
+                DELIMITER //
+                drop procedure if exists check_enroll//
+                create procedure check_enroll(out p_out int, in lec_code char(8), in stu_id int,
+                                                                          in year_in int, in semester_in char(2))
+                begin
+                declare req_cnt decimal default 0;
+                declare pre_cnt decimal default 0;
+                declare enroll decimal default 0;
+                declare max_en decimal default 0;
+
+                select count(requires.prerequoscode)
+                into req_cnt
+                from requires
+                where requires.uoscode = lec_code;
+
+                select count(transcript.uoscode)
+                into pre_cnt
+                from transcript, requires
+                where requires.uoscode = lec_code
+                and studID = stu_id
+                and requires.prerequoscode = transcript.uoscode
+                and transcript.grade is not null;
+
+                select enrollment, maxenrollment
+                into enroll, max_en
+                from uosoffering
+                where uoscode = lec_code
+                and year = year_in
+                and semester = semester_in;
+
+                  if exists(select *
+                                        from transcript
+                                        where studID = 3213
+                                        and uoscode = lec_code)
+                  then
+                      set p_out=1;
+                  elseif (req_cnt > pre_cnt)
+                  then
+                          set p_out = 2;
+                  elseif (enroll >= max_en)
+                  then
+                      set p_out = 3;
+                  else
+                          set p_out = 4;
+                      
+                      insert into transcript
+                      values(stu_id, lec_code, semester_in, year_in, null);
+                      
+                      update uosoffering
+                          set enrollment = enrollment + 1
+                          where uoscode = lec_code
+                          and year = year_in
+                          and semester = semester_in;
+                  end if;
+                  select @p_out;
+                  end//
+                  DELIMITER ;""")
+                '''
+                args = (p_out, answer, profile['id'], cur['year'], cur['semester'])
+                args = cursor.callproc(
+                'check_enroll', args)
+                #connection.commit()
                 cursor.close()
+                #Judge Duplicate
+                print(args)
+                p_out = args[0]
                 
-                if len(judge1) != 0:
+                if p_out == 1:
                     pt.shortcuts.message_dialog(
                     title = "Lecture Selection Failed",
                     text = "Cannot Select Duplicate Lectures!",
@@ -274,29 +334,19 @@ def showEnrollment():
                     continue
                 
                 #Judge prerequsite
-                cursor = connection.cursor()
-                cursor.execute("""
-                    select transcript.uoscode
-                    from transcript, requires
-                    where requires.uoscode = %s
-                    and studID = %s
-                    and requires.prerequoscode = transcript.uoscode
-                    and transcript.grade is not null""",  \
-                    (answer, profile['id'], ))
-                pre = cursor.fetchall()
-                #print(pre)
-
-                cursor.execute("""
-                    select requires.prerequoscode
-                    from requires
-                    where requires.uoscode = %s""",  \
-                    (answer, ))
-                req = cursor.fetchall()
-                #print(req)
-                cursor.close()
                 
-                if len(pre) < len(req):
+                elif p_out == 2:
+                    cursor = connection.cursor()
+                    cursor.execute("""
+                        select requires.prerequoscode
+                        from requires
+                        where requires.uoscode = %s""",  \
+                        (answer, ))
+                    req = cursor.fetchall()
+                    #print(req)
+                    cursor.close()
                     reqmsg = ''
+                    
                     for cl in req:
                         reqmsg += str(cl).replace("("," ").replace(")","").replace(","," ")
                     pt.shortcuts.message_dialog(
@@ -308,19 +358,19 @@ def showEnrollment():
                     continue
                 
                 #Judge maxenrollment
-                cursor = connection.cursor()
-                cursor.execute("""
-                    select enrollment, maxenrollment
-                    from uosoffering
-                    where uoscode = %s
-                    and year = %s
-                    and semester = %s""",  \
-                    (answer, cur['year'], cur['semester']))
-                judge3 = cursor.fetchall()
-                cursor.close()
-                print(judge3)
-
-                if judge3[0][0] >= judge3[0][1]:
+                
+                elif p_out == 3:
+                    cursor = connection.cursor()
+                    cursor.execute("""
+                        select enrollment, maxenrollment
+                        from uosoffering
+                        where uoscode = %s
+                        and year = %s
+                        and semester = %s""",  \
+                        (answer, cur['year'], cur['semester']))
+                    judge3 = cursor.fetchall()
+                    cursor.close()
+                    
                     pt.shortcuts.message_dialog(
                     title = "Lecture Selection Failed",
                     text = "%s is Full Now(%s/%s)!" % (answer, judge3[0][0], judge3[0][1]),
@@ -329,32 +379,16 @@ def showEnrollment():
                     }),)
                     continue
                 #All cases passed, now update information
-                print(cur['year'], cur['semester'])
-                cursor = connection.cursor()
-                #insert into transcript
-                cursor.execute("""
-                    insert into transcript
-                    values(%s,%s,%s,%s,null)""",  \
-                    (profile['id'], answer, cur['semester'], cur['year']))
-                connection.commit()
-                #update enrollment
-                cursor.execute("""
-                    update uosoffering
-                    set enrollment = enrollment + 1
-                    where uoscode = %s
-                    and year = %s
-                    and semester = %s""",  \
-                    (answer, cur['year'], cur['semester']))
-                connection.commit()
-                cursor.close()
-
-                pt.shortcuts.message_dialog(
-                title = "Lecture Selection Succeed",
-                text = "Congratulations! You Have Selected %s Succesfully!" % (answer, ),
-                style = pt.styles.Style.from_dict({
-                "dialog": "bg:#00ff00",
-                }),)
-                continue
+                elif p_out == 4:
+                    pt.shortcuts.message_dialog(
+                    title = "Lecture Selection Succeed",
+                    text = "Congratulations! You Have Selected %s Succesfully!" % (answer, ),
+                    style = pt.styles.Style.from_dict({
+                    "dialog": "bg:#00ff00",
+                    }),)
+                    continue
+                else:
+                    raise ValueError("Wrong P_OUT!")
             
             pass
             
@@ -390,7 +424,16 @@ def showProfile():
         newAddress = pt.shortcuts.input_dialog(
             title = "Change address",
             text = "New address",
+            cancel_text = 'Cancel',
         )
+        cursor = connection.cursor()
+        cursor.execute("""
+            update student
+            set address = %s
+            where id = %s
+        """, (newAddress, profile["id"]))
+        connection.commit()
+        cursor.close()
     elif answer == "password":
         newPassword = pt.shortcuts.input_dialog(
             title = "Change password",
@@ -399,8 +442,8 @@ def showProfile():
         )
         if newPassword == None:
             pt.shortcuts.message_dialog(
-                title = "New Password",
-                text = "Password update failed",
+                title = "New Password Failed",
+                text = "Password Should Not be NULL!",
                 style = pt.styles.Style.from_dict(
                     {"dialog":"bg:#ff0000",
                      }),
