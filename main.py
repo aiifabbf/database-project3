@@ -195,41 +195,42 @@ def showWithdraw():
     pass
 
 def showProfile():
-    profile.update(getProfile(profile["id"]))
-    text = pt.HTML("""
-        <b>student id</b> %s \n
-        <b>name</b> %s \n
-        <b>address</b> %s \n
-        <b>password</b> %s \n
-    """ % (profile["id"], profile["username"], profile["address"], profile["password"]))
-    actions = pt.layout.HSplit([
-        pt.widgets.Button("Change address", lambda: handler("address"), 20),
-        pt.widgets.Button("Change password", lambda: handler("password"), 20),
-        pt.widgets.Button("Return", lambda: handler("return")),
-    ])
-    layout = pt.layout.VSplit([
-        pt.widgets.Label(text),
-        actions,
-    ], padding = 1)
-    dialog = pt.shortcuts.dialogs.Dialog(
-        title = "Peronsal details",
-        body = layout,
-        with_background=True
-    )
-    answer = pt.shortcuts.dialogs._run_dialog(dialog, None)
+    while True:
+        profile.update(getProfile(profile["id"]))
+        text = pt.HTML("""
+            <b>student id</b> %s \n
+            <b>name</b> %s \n
+            <b>address</b> %s \n
+            <b>password</b> %s \n
+        """ % (profile["id"], profile["username"], profile["address"], profile["password"]))
+        actions = pt.layout.HSplit([
+            pt.widgets.Button("Change address", lambda: handler("address"), 20),
+            pt.widgets.Button("Change password", lambda: handler("password"), 20),
+            pt.widgets.Button("Return", lambda: handler("return")),
+        ])
+        layout = pt.layout.VSplit([
+            pt.widgets.Label(text),
+            actions,
+        ], padding = 1)
+        dialog = pt.shortcuts.dialogs.Dialog(
+            title = "Peronsal details",
+            body = layout,
+            with_background=True
+        )
+        answer = pt.shortcuts.dialogs._run_dialog(dialog, None)
 
-    if answer == "address":
-        newAddress = pt.shortcuts.input_dialog(
-            title = "Change address",
-            text = "New address",
-        )
-    elif answer == "password":
-        newPassword = pt.shortcuts.input_dialog(
-            title = "Change password",
-            text = "New password",
-        )
-    else:
-        return
+        if answer == "address":
+            newAddress = pt.shortcuts.input_dialog(
+                title = "Change address",
+                text = "New address",
+            )
+        elif answer == "password":
+            newPassword = pt.shortcuts.input_dialog(
+                title = "Change password",
+                text = "New password",
+            )
+        else:
+            return
 
 if __name__ == "__main__":
     try:
