@@ -75,7 +75,6 @@ def showLoginView():
             cur = {}
             #print(profile)
             showStudentMenu() # enter student menu
-            exit()
 
 # student menu
 def showStudentMenu():
@@ -389,7 +388,6 @@ def showEnrollment():
                     raise ValueError("Wrong P_OUT!")
             
             pass
-            
 
 def showWithdraw():
     while True:
@@ -414,7 +412,6 @@ def showWithdraw():
             v[0],
             v[0] + "    " + v[1] + "    " + str(v[2]) + "   " + str(v[3])
         ), values))
-        
         
         answer = pt.shortcuts.radiolist_dialog(
             title = "%s-%s Lecture" % (cur['year'], cur['semester']),
