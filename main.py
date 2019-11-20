@@ -50,7 +50,7 @@ def showLoginView():
         cursor.execute("select id, name, password, address from student where student.name = %s and student.password = %s", (username, password))
         values = cursor.fetchall()
         cursor.close()
-        
+
         if len(values) == 0:
             pt.shortcuts.message_dialog(
                 title = "NU Login",
@@ -122,7 +122,7 @@ def showStudentMenu():
             ], padding=1),
             actions,
         ], padding=1)
-        
+
         dialog = pt.shortcuts.dialogs.Dialog(
             # title = "Welcome, %s. Today is %s-%s Semester" % (profile["username"], values[0][2], values[0][1]),
             title = "Welcome, %s. Today is %s-%s-%s" % (profile["username"], cur["year"], cur["month"], cur["day"]),
@@ -135,7 +135,7 @@ def showStudentMenu():
         #cur = [values[0][2], values[0][1]]
         cur['year'] = values[0][2]
         cur['semester'] = values[0][1]
-        
+
         if answer == None: # user pressed logout
             return
         elif answer == "transcript":
@@ -155,12 +155,12 @@ def showTranscript():
         cursor.execute("select uosCode, semester, year, grade from transcript where studId = %s", (profile["id"], ))
         values = cursor.fetchall()
         cursor.close()
-        today = datetime.date.today()
+
         courses = list(map(lambda v: (
             v[0],
-            v[0] + "    " + v[1] + "    " + str(v[2]) + "   " + str(v[3])
+            v[0] + "    " + v[1] + "    " + str(v[2]) + "   " + str(v[3] or "N/A")
         ), values))
-        
+
         answer = pt.shortcuts.radiolist_dialog(
             title = "%s's transcript" % profile["username"],
             text = "Select course to see details",
@@ -168,14 +168,13 @@ def showTranscript():
             cancel_text = "Return",
             values = courses
         )
-        #print(answer)
-        if answer == None:
+        if answer == None: # user pressed return
             return
         else:
             showCourseDetail(answer)
 
 def showCourseDetail(courseId: str):
-    print(courseId)
+    # print(courseId)
     cursor = connection.cursor()
     cursor.execute("""
         select uosName
@@ -200,8 +199,7 @@ def showCourseDetail(courseId: str):
 
     cursor.close()
 
-    print(courseId, courseName, year, semester, enrollment, maxEnrollment, instructorName)
-
+    # print(courseId, courseName, year, semester, enrollment, maxEnrollment, instructorName)
     answer = pt.shortcuts.message_dialog(
         title = "%s: %s" % (courseId, courseName),
         text = pt.HTML("""
@@ -213,7 +211,7 @@ def showCourseDetail(courseId: str):
             <b>max enrollment</b> %d \n
             <b>instructor name</b> %s \n
             <b>grade</b> %s
-        """ % (courseId, courseName, year, semester, enrollment, maxEnrollment, instructorName, grade if grade else "N/A"))
+        """ % (courseId, courseName, year, semester, enrollment, maxEnrollment, instructorName, grade or "N/A"))
     )
     return
 
@@ -241,8 +239,8 @@ def showEnrollment():
             v[0],
             v[0] + "    " + v[1] + "    " + str(v[2]) + "   " + str(v[3]) + "   " + str(v[4])
         ), values))
-        
-        
+
+
         answer = pt.shortcuts.radiolist_dialog(
             title = "%s-%s Lecture" % (cur['year'], cur['semester']),
             text = "Lectures available for this and next semester are listed",
@@ -258,11 +256,11 @@ def showEnrollment():
             confirm = pt.shortcuts.yes_no_dialog(
                 title = 'Confirm',
                 text = 'Do you want to select %s?' % (answer, ))
-            
+
             if confirm:
                 p_out = 0
                 cursor = connection.cursor()
-                
+
                 cursor.execute("""
                 drop procedure if exists check_enroll""")
                 cursor.execute("""
@@ -308,10 +306,10 @@ def showEnrollment():
                       set p_out = 3;
                   else
                           set p_out = 4;
-                      
+
                       insert into transcript
                       values(stu_id, lec_code, semester_in, year_in, null);
-                      
+
                       update uosoffering
                           set enrollment = enrollment + 1
                           where uoscode = lec_code
@@ -320,7 +318,7 @@ def showEnrollment():
                   end if;
                   select @p_out;
                   end""")
-                
+
                 args = (p_out, answer, profile['id'], cur['year'], cur['semester'])
                 args = cursor.callproc(
                 'check_enroll', args)
@@ -329,7 +327,7 @@ def showEnrollment():
                 #Judge Duplicate
                 print(args)
                 p_out = args[0]
-                
+
                 if p_out == 1:
                     pt.shortcuts.message_dialog(
                     title = "Lecture Selection Failed",
@@ -338,9 +336,9 @@ def showEnrollment():
                     "dialog": "bg:#ff0000",
                     }),)
                     continue
-                
+
                 #Judge prerequsite
-                
+
                 elif p_out == 2:
                     cursor = connection.cursor()
                     cursor.execute("""
@@ -352,7 +350,7 @@ def showEnrollment():
                     #print(req)
                     cursor.close()
                     reqmsg = ''
-                    
+
                     for cl in req:
                         reqmsg += str(cl).replace("("," ").replace(")","").replace(","," ")
                     pt.shortcuts.message_dialog(
@@ -362,9 +360,9 @@ def showEnrollment():
                     "dialog": "bg:#ff0000",
                     }),)
                     continue
-                
+
                 #Judge maxenrollment
-                
+
                 elif p_out == 3:
                     cursor = connection.cursor()
                     cursor.execute("""
@@ -376,7 +374,7 @@ def showEnrollment():
                         (answer, cur['year'], cur['semester']))
                     judge3 = cursor.fetchall()
                     cursor.close()
-                    
+
                     pt.shortcuts.message_dialog(
                     title = "Lecture Selection Failed",
                     text = "%s is Full Now(%s/%s)!" % (answer, judge3[0][0], judge3[0][1]),
@@ -395,7 +393,7 @@ def showEnrollment():
                     continue
                 else:
                     raise ValueError("Wrong P_OUT!")
-            
+
             pass
 
 def showWithdraw():
@@ -421,7 +419,7 @@ def showWithdraw():
             v[0],
             v[0] + "    " + v[1] + "    " + str(v[2]) + "   " + str(v[3])
         ), values))
-        
+
         answer = pt.shortcuts.radiolist_dialog(
             title = "%s-%s Lecture" % (cur['year'], cur['semester']),
             text = "Lectures you have chosen for this semester are listed",
@@ -437,7 +435,7 @@ def showWithdraw():
             confirm = pt.shortcuts.yes_no_dialog(
                 title = 'Confirm',
                 text = 'Do you want to withdraw %s?' % (answer, ))
-            
+
             if confirm:
                 p_out = 0
                 cursor = connection.cursor()
@@ -450,10 +448,10 @@ def showWithdraw():
                 for each row
                 if new.enrollment < old.enrollment
                 then
-                if (select enrollment from uosoffering 
+                if (select enrollment from uosoffering
                 where UoSCode = new.UoSCode and year = new.year
-                and semester = new.Semester) < 
-                (select MaxEnrollment/2 from uosoffering 
+                and semester = new.Semester) <
+                (select MaxEnrollment/2 from uosoffering
                 where UoSCode = new.UoSCode and year = new.year
                 and semester = new.Semester) then
                 begin
@@ -474,13 +472,13 @@ def showWithdraw():
                       delete from transcript
                       where StudId = stu_id and UoSCode = lec_code
                       and Semester = semester_in and year = year_in;
-                      
+
                       update uosoffering
                         set enrollment = enrollment - 1
                         where uoscode = lec_code
                         and year = year_in
                         and semester = semester_in;
-                          
+
                       select semester
                       into trigger_val
                       from whenoffered
@@ -554,7 +552,7 @@ def showProfile():
             newPassword = pt.shortcuts.input_dialog(
                 title = "Change Password",
                 text = "New password",
-                cancel_text = 'Cancel', 
+                cancel_text = 'Cancel',
             )
             if newPassword == None: # user pressed cancel
                 pass # do nothing
