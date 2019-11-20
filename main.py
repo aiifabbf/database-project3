@@ -23,12 +23,6 @@ def getProfile(id):
     }
 
 def main():
-    cursor = connection.cursor()
-
-    cursor.execute("select * from student")
-    values = cursor.fetchall()
-    cursor.close()
-    #print(values)
     showLoginView()
 
 # login view
@@ -55,7 +49,6 @@ def showLoginView():
         cursor = connection.cursor()
         cursor.execute("select id, name, password, address from student where student.name = %s and student.password = %s", (username, password))
         values = cursor.fetchall()
-        #print(values)
         cursor.close()
         
         if len(values) == 0:
@@ -72,36 +65,47 @@ def showLoginView():
             profile["username"] = values[0][1]
             profile["password"] = values[0][2]
             profile["address"] = values[0][3]
-            cur = {}
-            #print(profile)
             showStudentMenu() # enter student menu
 
 # student menu
 def showStudentMenu():
     while True:
+        today = datetime.date.today()
+        cur["year"] = today.year
+        cur["month"] = today.month
+        cur["day"] = today.day
+        cur["semester"] = "Q1" if 1 <= today.month <= 6 else "Q2" # [January, June] -> Q1, [July, December] -> Q2
+
         cursor = connection.cursor()
+        # cursor.execute("""
+        #             select distinct temp1.uosCode, temp1.semester, temp1.year, temp1.grade
+        #             from
+        #             (select uosCode, semester, year, grade
+        #             from transcript
+        #             where studId = %s and grade is null)temp1,
+        #             (select uosCode, semester, year, grade
+        #             from transcript
+        #             where studId = %s and grade is null)temp2
+        #             where temp1.year > temp2.year
+        #             and temp1.semester > temp2.semester""", (profile["id"], profile["id"],))
         cursor.execute("""
-                    select distinct temp1.uosCode, temp1.semester, temp1.year, temp1.grade
-                    from
-                    (select uosCode, semester, year, grade
-                    from transcript
-                    where studId = %s and grade is null)temp1,
-                    (select uosCode, semester, year, grade
-                    from transcript
-                    where studId = %s and grade is null)temp2
-                    where temp1.year > temp2.year
-                    and temp1.semester > temp2.semester""", (profile["id"], profile["id"],))
+            select uosCode, semester, year, grade
+            from transcript
+            where
+                studId = %s
+                and year = %s
+                and semester = %s
+        """, (profile["id"], cur["year"], cur["semester"]))
         values = cursor.fetchall()
-        print(values)
         cursor.close()
-        #today = datetime.date.today()
-        courses = list(map(lambda v: (
-            v[0],
-            v[0] + "    " + v[1] + "    " + str(v[2]) + "   " + str(v[3])
-        ), values))
 
         # build gui
+        courses = list(map(lambda v: (
+            v[0],
+            v[0] + "    " + v[1] + "    " + str(v[2]) + "   " + str(v[3] or "N/A")
+        ), values))
 
+        label = pt.widgets.Label("Your %s-%s semester courses" % (cur["year"], cur["semester"]))
         radioList = pt.widgets.RadioList(courses)
         actions = pt.layout.HSplit([
             pt.widgets.Button("Transcript", lambda: handler("transcript")),
@@ -110,12 +114,18 @@ def showStudentMenu():
             pt.widgets.Button("Personal Details", lambda: handler("profile"), width = 20),
             pt.widgets.Button("Log out", lambda: handler("logout"))
         ])
+
         layout = pt.layout.VSplit([
-            radioList,
-            actions
-        ], padding = 1)
+            pt.layout.HSplit([
+                label,
+                radioList
+            ], padding=1),
+            actions,
+        ], padding=1)
+        
         dialog = pt.shortcuts.dialogs.Dialog(
-            title = "Welcome, %s. Today is %s-%s Semester" % (profile["username"], values[0][2], values[0][1]),
+            # title = "Welcome, %s. Today is %s-%s Semester" % (profile["username"], values[0][2], values[0][1]),
+            title = "Welcome, %s. Today is %s-%s-%s" % (profile["username"], cur["year"], cur["month"], cur["day"]),
             body = layout,
             with_background=True)
 
@@ -126,7 +136,7 @@ def showStudentMenu():
         cur['year'] = values[0][2]
         cur['semester'] = values[0][1]
         
-        if answer == None:
+        if answer == None: # user pressed logout
             return
         elif answer == "transcript":
             showTranscript()
@@ -144,7 +154,6 @@ def showTranscript():
         cursor = connection.cursor()
         cursor.execute("select uosCode, semester, year, grade from transcript where studId = %s", (profile["id"], ))
         values = cursor.fetchall()
-        #print(values)
         cursor.close()
         today = datetime.date.today()
         courses = list(map(lambda v: (
