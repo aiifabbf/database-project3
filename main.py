@@ -257,12 +257,12 @@ def showEnrollment():
             if confirm:
                 p_out = 0
                 cursor = connection.cursor()
-                '''
+                
                 cursor.execute("""
-                DELIMITER //
-                drop procedure if exists check_enroll//
+                drop procedure if exists check_enroll""")
+                cursor.execute("""
                 create procedure check_enroll(out p_out int, in lec_code char(8), in stu_id int,
-                                                                          in year_in int, in semester_in char(2))
+                                                        in year_in int, in semester_in char(2))
                 begin
                 declare req_cnt decimal default 0;
                 declare pre_cnt decimal default 0;
@@ -314,13 +314,12 @@ def showEnrollment():
                           and semester = semester_in;
                   end if;
                   select @p_out;
-                  end//
-                  DELIMITER ;""")
-                '''
+                  end""")
+                
                 args = (p_out, answer, profile['id'], cur['year'], cur['semester'])
                 args = cursor.callproc(
                 'check_enroll', args)
-                #connection.commit()
+                connection.commit()
                 cursor.close()
                 #Judge Duplicate
                 print(args)
@@ -437,31 +436,68 @@ def showWithdraw():
                 text = 'Do you want to withdraw %s?' % (answer, ))
             
             if confirm:
-                '''
-                DELIMITER //
-                drop procedure if exists check_withdraw//
+                p_out = 0
+                cursor = connection.cursor()
+                #trigger
+                cursor.execute("""
+                drop trigger if exists check_halfenroll""")
+                cursor.execute("""
+                create trigger check_halfenroll
+                after update on uosoffering
+                for each row
+                if new.enrollment < old.enrollment
+                then
+                if (select enrollment from uosoffering 
+                where UoSCode = new.UoSCode and year = new.year
+                and semester = new.Semester) < 
+                (select MaxEnrollment/2 from uosoffering 
+                where UoSCode = new.UoSCode and year = new.year
+                and semester = new.Semester) then
+                begin
+                    insert into whenoffered
+                    values('test', 'T');
+                end;
+                else
+                    insert into whenoffered
+                    values('test', 'NT');
+                end if;
+                end if""")
+                cursor.execute("""
+                drop procedure if exists check_withdraw""")
+                cursor.execute("""
                 create procedure check_withdraw(in lec_code char(8), in stu_id int,
-                                                                          in year_in int, in semester_in char(2))
+                                in year_in int, in semester_in char(2), out trigger_val char)
                 begin
                       delete from transcript
-                          where StudId = stu_id and UoSCode = lec_code
+                      where StudId = stu_id and UoSCode = lec_code
                       and Semester = semester_in and year = year_in;
                       
                       update uosoffering
-                          set enrollment = enrollment - 1
-                          where uoscode = lec_code
-                          and year = year_in
-                          and semester = semester_in;
-                  end//
-                  DELIMITER ;
-                '''
-                cursor = connection.cursor()
-                args = (answer, profile['id'], cur['year'], cur['semester'])
+                        set enrollment = enrollment - 1
+                        where uoscode = lec_code
+                        and year = year_in
+                        and semester = semester_in;
+                          
+                      select semester
+                      into trigger_val
+                      from whenoffered
+                      where uoscode = 'test';
+
+                      delete from whenoffered
+                      where uoscode = 'test';
+                end""")
+                args = (answer, profile['id'], cur['year'], cur['semester'], p_out)
                 args = cursor.callproc(
                 'check_withdraw', args)
-                #connection.commit()
-                #trigger
+                connection.commit()
                 cursor.close()
+                if args[-1] == 'T':
+                    pt.shortcuts.message_dialog(
+                    title = "Lecture Withdraw Warning",
+                    text = "Lecture %s Now Contains Less Than Half MaxEnrollment!" % (answer, ),
+                    style = pt.styles.Style.from_dict({
+                    "dialog": "bg:#ffff00",
+                    }),)
                 pt.shortcuts.message_dialog(
                     title = "Lecture Withdraw Succeed",
                     text = "Congratulations! You Have Withdrawn %s Succesfully!" % (answer, ),
@@ -478,7 +514,7 @@ def showProfile():
         <b>password</b> %s \n
     """ % (profile["id"], profile["username"], profile["address"], profile["password"]))
     actions = pt.layout.HSplit([
-        pt.widgets.Button("Change address", lambda: handler("address"), 20),
+        pt.widgets.Button("Change  address", lambda: handler("address"), 20),
         pt.widgets.Button("Change password", lambda: handler("password"), 20),
         pt.widgets.Button("Return", lambda: handler("return")),
     ])
