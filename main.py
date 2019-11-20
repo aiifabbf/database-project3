@@ -153,7 +153,6 @@ def showTranscript():
             v[0] + "    " + v[1] + "    " + str(v[2]) + "   " + str(v[3])
         ), values))
         
-        
         answer = pt.shortcuts.radiolist_dialog(
             title = "%s's transcript" % profile["username"],
             text = "Select course to see details",
@@ -166,8 +165,6 @@ def showTranscript():
             return
         else:
             showCourseDetail(answer)
-        
-        
 
 def showCourseDetail(courseId: str):
     print(courseId)
@@ -328,7 +325,7 @@ def showEnrollment():
                 if p_out == 1:
                     pt.shortcuts.message_dialog(
                     title = "Lecture Selection Failed",
-                    text = "Cannot Select Duplicate Lectures!",
+                    text = "Cannot select duplicate lectures!",
                     style = pt.styles.Style.from_dict({
                     "dialog": "bg:#ff0000",
                     }),)
@@ -352,7 +349,7 @@ def showEnrollment():
                         reqmsg += str(cl).replace("("," ").replace(")","").replace(","," ")
                     pt.shortcuts.message_dialog(
                     title = "Lecture Selection Failed",
-                    text = "To Select %s, You Should Complete%s First!" % (answer, reqmsg, ),
+                    text = "To select %s, you should complete %s First!" % (answer, reqmsg, ),
                     style = pt.styles.Style.from_dict({
                     "dialog": "bg:#ff0000",
                     }),)
@@ -383,7 +380,7 @@ def showEnrollment():
                 elif p_out == 4:
                     pt.shortcuts.message_dialog(
                     title = "Lecture Selection Succeed",
-                    text = "Congratulations! You Have Selected %s Succesfully!" % (answer, ),
+                    text = "Congratulations! You have selected %s successfully!" % (answer, ),
                     style = pt.styles.Style.from_dict({
                     "dialog": "bg:#00ff00",
                     }),)
@@ -494,84 +491,91 @@ def showWithdraw():
                 if args[-1] == 'T':
                     pt.shortcuts.message_dialog(
                     title = "Lecture Withdraw Warning",
-                    text = "Lecture %s Now Contains Less Than Half MaxEnrollment!" % (answer, ),
+                    text = "Lecture %s now contains less than half MaxEnrollment!" % (answer, ),
                     style = pt.styles.Style.from_dict({
-                    "dialog": "bg:#ffff00",
+                        "dialog": "bg:#ffff00",
                     }),)
                 pt.shortcuts.message_dialog(
                     title = "Lecture Withdraw Succeed",
-                    text = "Congratulations! You Have Withdrawn %s Succesfully!" % (answer, ),
+                    text = "Congratulations! You have withdrawn from %s successfully!" % (answer, ),
                     style = pt.styles.Style.from_dict({
                     "dialog": "bg:#00ff00",
                     }),)
 
 def showProfile():
-    profile.update(getProfile(profile["id"]))
-    text = pt.HTML("""
-        <b>student id</b> %s \n
-        <b>name</b> %s \n
-        <b>address</b> %s \n
-        <b>password</b> %s \n
-    """ % (profile["id"], profile["username"], profile["address"], profile["password"]))
-    actions = pt.layout.HSplit([
-        pt.widgets.Button("Change  address", lambda: handler("address"), 20),
-        pt.widgets.Button("Change password", lambda: handler("password"), 20),
-        pt.widgets.Button("Return", lambda: handler("return")),
-    ])
-    layout = pt.layout.VSplit([
-        pt.widgets.Label(text),
-        actions,
-    ], padding = 1)
-    dialog = pt.shortcuts.dialogs.Dialog(
-        title = "Peronsal details",
-        body = layout,
-        with_background=True
-    )
-    answer = pt.shortcuts.dialogs._run_dialog(dialog, None)
+    while True:
+        profile.update(getProfile(profile["id"]))
+        text = pt.HTML("""
+            <b>student id</b> %s \n
+            <b>name</b> %s \n
+            <b>address</b> %s \n
+            <b>password</b> %s \n
+        """ % (profile["id"], profile["username"], profile["address"], profile["password"]))
+        actions = pt.layout.HSplit([
+            pt.widgets.Button("Change  address", lambda: handler("address"), 20),
+            pt.widgets.Button("Change password", lambda: handler("password"), 20),
+            pt.widgets.Button("Return", lambda: handler("return")),
+        ])
+        layout = pt.layout.VSplit([
+            pt.widgets.Label(text),
+            actions,
+        ], padding = 1)
+        dialog = pt.shortcuts.dialogs.Dialog(
+            title = "Personal Details",
+            body = layout,
+            with_background=True
+        )
+        answer = pt.shortcuts.dialogs._run_dialog(dialog, None)
 
-    if answer == "address":
-        newAddress = pt.shortcuts.input_dialog(
-            title = "Change address",
-            text = "New address",
-            cancel_text = 'Cancel',
-        )
-        cursor = connection.cursor()
-        cursor.execute("""
-            update student
-            set address = %s
-            where id = %s
-        """, (newAddress, profile["id"]))
-        connection.commit()
-        cursor.close()
-    elif answer == "password":
-        newPassword = pt.shortcuts.input_dialog(
-            title = "Change password",
-            text = "New password",
-            cancel_text = 'Cancel', 
-        )
-        if newPassword == None:
-            pt.shortcuts.message_dialog(
-                title = "New Password Failed",
-                text = "Password Should Not be NULL!",
-                style = pt.styles.Style.from_dict(
-                    {"dialog":"bg:#ff0000",
-                     }),
-                )
-        cursor = connection.cursor()
-        cursor.execute("""
-            update student
-            set password = %s
-            where id = %s
-        """, (newPassword, profile["id"]))
-        connection.commit()
-        cursor.close()
-    else:
-        return
+        if answer == "address":
+            newAddress = pt.shortcuts.input_dialog(
+                title = "Change Address",
+                text = "New address",
+                cancel_text = 'Cancel',
+            )
+            if newAddress == None: # user pressed cancel
+                pass # do nothing
+            else:
+                cursor = connection.cursor()
+                cursor.execute("""
+                    update student
+                    set address = %s
+                    where id = %s
+                """, (newAddress, profile["id"]))
+                connection.commit()
+                cursor.close()
+        elif answer == "password":
+            newPassword = pt.shortcuts.input_dialog(
+                title = "Change Password",
+                text = "New password",
+                cancel_text = 'Cancel', 
+            )
+            if newPassword == None: # user pressed cancel
+                pass # do nothing
+            else:
+                if newPassword == "": # password is empty
+                    pt.shortcuts.message_dialog(
+                        title = "New Password Failed",
+                        text = "Password should not be empty!",
+                        style = pt.styles.Style.from_dict({"dialog": "bg:#ff0000"}),
+                    ) # give a warning
+                else: # password is not empty
+                    cursor = connection.cursor()
+                    cursor.execute("""
+                        update student
+                        set password = %s
+                        where id = %s
+                    """, (newPassword, profile["id"]))
+                    connection.commit()
+                    cursor.close()
+        else:
+            return
 
 if __name__ == "__main__":
     try:
-        connection = mysql.connector.connect(user="root", password="294811", database="project3-nudb", host="localhost", port=3306)
+        connection = mysql.connector.connect(user="root", password="19961226syc", database="project3-nudb", host="localhost", port=3306)
         main()
     except:
         traceback.print_exc()
+    finally:
         connection.close()
