@@ -216,30 +216,28 @@ def showCourseDetail(courseId: str):
     return
 
 def showEnrollment():
-    #print(cur)
     if cur['semester'] == "Q2":
-        tempy = cur['year'] + 1
-        tempq = "Q1"
+        nextYear = cur['year'] + 1
+        nextSemester = "Q1"
     elif cur['semester'] == "Q1":
-        tempy = cur['year']
-        tempq = "Q2"
+        nextYear = cur['year']
+        nextSemester = "Q2"
+
     while True:
         cursor = connection.cursor()
         cursor.execute("""
-                select *
-                from lecture
-                where (year = %s and semester = %s)
-                or (year = %s and semester = %s)""",  \
-                (cur['year'], cur['semester'], tempy, tempq, ))
+            select *
+            from lecture
+            where (year = %s and semester = %s)
+            or (year = %s and semester = %s)""",  \
+            (cur['year'], cur['semester'], nextYear, nextSemester, )) # get all courses available this semester or next semester, even if this course is currently being taken
         values = cursor.fetchall()
-        #print(values)
         cursor.close()
-        #today = datetime.date.today()
+
         courses = list(map(lambda v: (
             v[0],
             v[0] + "    " + v[1] + "    " + str(v[2]) + "   " + str(v[3]) + "   " + str(v[4])
         ), values))
-
 
         answer = pt.shortcuts.radiolist_dialog(
             title = "%s-%s Lecture" % (cur['year'], cur['semester']),
@@ -248,16 +246,14 @@ def showEnrollment():
             cancel_text = "Return",
             values = courses
         )
-        #print(answer)
-        if answer == None:
+        if answer == None: # user pressed return
             return
         else:
-            #print(answer)
             confirm = pt.shortcuts.yes_no_dialog(
-                title = 'Confirm',
+                title = 'Confirm Enrollment',
                 text = 'Do you want to select %s?' % (answer, ))
 
-            if confirm:
+            if confirm: # user pressed yes
                 p_out = 0
                 cursor = connection.cursor()
 
@@ -320,24 +316,25 @@ def showEnrollment():
                   end""")
 
                 args = (p_out, answer, profile['id'], cur['year'], cur['semester'])
-                args = cursor.callproc(
-                'check_enroll', args)
+                args = cursor.callproc('check_enroll', args)
                 connection.commit()
                 cursor.close()
-                #Judge Duplicate
+
+                # Judge duplicate
                 print(args)
                 p_out = args[0]
 
                 if p_out == 1:
                     pt.shortcuts.message_dialog(
-                    title = "Lecture Selection Failed",
-                    text = "Cannot select duplicate lectures!",
-                    style = pt.styles.Style.from_dict({
-                    "dialog": "bg:#ff0000",
-                    }),)
+                        title = "Lecture Selection Failed",
+                        text = "Cannot select duplicate lectures!",
+                        style = pt.styles.Style.from_dict({
+                            "dialog": "bg:#ff0000",
+                        }),
+                    )
                     continue
 
-                #Judge prerequsite
+                # Judge prerequisite
 
                 elif p_out == 2:
                     cursor = connection.cursor()
@@ -347,18 +344,20 @@ def showEnrollment():
                         where requires.uoscode = %s""",  \
                         (answer, ))
                     req = cursor.fetchall()
-                    #print(req)
+                    print(req)
                     cursor.close()
                     reqmsg = ''
 
                     for cl in req:
                         reqmsg += str(cl).replace("("," ").replace(")","").replace(","," ")
+
                     pt.shortcuts.message_dialog(
-                    title = "Lecture Selection Failed",
-                    text = "To select %s, you should complete %s First!" % (answer, reqmsg, ),
-                    style = pt.styles.Style.from_dict({
-                    "dialog": "bg:#ff0000",
-                    }),)
+                        title = "Lecture Selection Failed",
+                        text = "To select %s, you should complete %s First!" % (answer, reqmsg, ),
+                        style = pt.styles.Style.from_dict({
+                            "dialog": "bg:#ff0000",
+                        }),
+                    )
                     continue
 
                 #Judge maxenrollment
@@ -393,8 +392,6 @@ def showEnrollment():
                     continue
                 else:
                     raise ValueError("Wrong P_OUT!")
-
-            pass
 
 def showWithdraw():
     while True:
