@@ -53,13 +53,21 @@ def showLoginView():
 
         if len(values) == 0:
             pt.shortcuts.message_dialog(
-                title = "NU Login",
+                title = "NU Login Error",
                 text = "Wrong username or password",
                 style = pt.styles.Style.from_dict({
                     "dialog": "bg:#ff0000",
                 }),
             )
             continue
+        elif values[0][1] != username or values[0][2] != password:
+            pt.shortcuts.message_dialog(
+                title = "NU Login Error",
+                text = "Wrong username or password\nTake care of CASE SENSITIVE!",
+                style = pt.styles.Style.from_dict({
+                    "dialog": "bg:#ff0000",
+                }),
+            )
         else:
             profile["id"] = values[0][0]
             profile["username"] = values[0][1]
@@ -89,13 +97,10 @@ def showStudentMenu():
         #             where temp1.year > temp2.year
         #             and temp1.semester > temp2.semester""", (profile["id"], profile["id"],))
         cursor.execute("""
-            select uosCode, semester, year, grade
-            from transcript
-            where
-                studId = %s
-                and year = %s
-                and semester = %s
-        """, (profile["id"], cur["year"], cur["semester"]))
+                    select distinct uosCode, semester, year, grade
+                    from transcript
+                    where studId = %s and year = %s
+                    and semester = %s""", (profile["id"], cur['year'], cur['semester'],))
         values = cursor.fetchall()
         cursor.close()
 
@@ -130,13 +135,8 @@ def showStudentMenu():
             with_background=True)
 
         answer = pt.shortcuts.dialogs._run_dialog(dialog, None)
-        #print(answer)
-        #cur = [year, semester]
-        #cur = [values[0][2], values[0][1]]
-        cur['year'] = values[0][2]
-        cur['semester'] = values[0][1]
-
-        if answer == None: # user pressed logout
+        
+        if answer == None:
             return
         elif answer == "transcript":
             showTranscript()
@@ -226,11 +226,12 @@ def showEnrollment():
     while True:
         cursor = connection.cursor()
         cursor.execute("""
-            select *
-            from lecture
-            where (year = %s and semester = %s)
-            or (year = %s and semester = %s)""",  \
-            (cur['year'], cur['semester'], nextYear, nextSemester, )) # get all courses available this semester or next semester, even if this course is currently being taken
+                select *
+                from lecture
+                where (year = %s and semester = %s)
+                or (year = %s and semester = %s)
+                order by year, semester ASC""",  \
+                (cur['year'], cur['semester'], nextYear, nextSemester, ))
         values = cursor.fetchall()
         cursor.close()
 
@@ -290,7 +291,7 @@ def showEnrollment():
 
                   if exists(select *
                                         from transcript
-                                        where studID = 3213
+                                        where studID = stu_id
                                         and uoscode = lec_code)
                   then
                       set p_out=1;
@@ -396,6 +397,7 @@ def showEnrollment():
 def showWithdraw():
     while True:
         cursor = connection.cursor()
+        '''
         cursor.execute("""
                     select distinct temp1.uosCode, temp1.semester, temp1.year, temp1.grade
                     from
@@ -407,6 +409,12 @@ def showWithdraw():
                     where studId = %s and grade is null)temp2
                     where temp1.year > temp2.year
                     and temp1.semester > temp2.semester""", (profile["id"], profile["id"],))
+        '''
+        cursor.execute("""
+                    select distinct uosCode, semester, year, grade
+                    from transcript
+                    where studId = %s and year = %s
+                    and semester = %s""", (profile["id"], cur['year'], cur['semester'],))
         values = cursor.fetchall()
 
         print(values)
@@ -434,6 +442,25 @@ def showWithdraw():
                 text = 'Do you want to withdraw %s?' % (answer, ))
 
             if confirm:
+                #judge if graded
+                cursor = connection.cursor()
+                cursor.execute("""
+                    select distinct uosCode, semester, year, grade
+                    from transcript
+                    where studId = %s and year = %s
+                    and semester = %s and uosCode = %s
+                    """, (profile["id"], cur['year'], cur['semester'], answer))
+                temp_grade = cursor.fetchall()[0][-1]
+                cursor.close()
+                if temp_grade != None:
+                    pt.shortcuts.message_dialog(
+                    title = "Lecture Withdraw Failed",
+                    text = "You can not drop a class already graded!",
+                    style = pt.styles.Style.from_dict({
+                    "dialog": "bg:#ff0000",
+                    }),)
+                    continue
+                    
                 p_out = 0
                 cursor = connection.cursor()
                 #trigger
@@ -464,7 +491,7 @@ def showWithdraw():
                 drop procedure if exists check_withdraw""")
                 cursor.execute("""
                 create procedure check_withdraw(in lec_code char(8), in stu_id int,
-                                in year_in int, in semester_in char(2), out trigger_val char)
+                                in year_in int, in semester_in char(2), out trigger_val char(8))
                 begin
                       delete from transcript
                       where StudId = stu_id and UoSCode = lec_code
@@ -574,7 +601,7 @@ def showProfile():
 
 if __name__ == "__main__":
     try:
-        connection = mysql.connector.connect(user="root", password="19961226syc", database="project3-nudb", host="localhost", port=3306)
+        connection = mysql.connector.connect(user="root", password="294811", database="project3-nudb", host="localhost", port=3306)
         main()
     except:
         traceback.print_exc()
