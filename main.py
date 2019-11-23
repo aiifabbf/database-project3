@@ -60,13 +60,21 @@ def showLoginView():
         
         if len(values) == 0:
             pt.shortcuts.message_dialog(
-                title = "NU Login",
+                title = "NU Login Error",
                 text = "Wrong username or password",
                 style = pt.styles.Style.from_dict({
                     "dialog": "bg:#ff0000",
                 }),
             )
             continue
+        elif values[0][1] != username or values[0][2] != password:
+            pt.shortcuts.message_dialog(
+                title = "NU Login Error",
+                text = "Wrong username or password\nTake care of CASE SENSITIVE!",
+                style = pt.styles.Style.from_dict({
+                    "dialog": "bg:#ff0000",
+                }),
+            )
         else:
             profile["id"] = values[0][0]
             profile["username"] = values[0][1]
@@ -80,22 +88,26 @@ def showLoginView():
 # student menu
 def showStudentMenu():
     while True:
+        today = str(datetime.date.today())
+        print(today)
+        print(today[:4], today[5:7])
+        #print(answer)
+        #cur = [year, semester]
+        #cur = [values[0][2], values[0][1]]
+        cur['year'] = int(today[:4])
+        if int(today[5:7]) > 0 and int(today[5:7]) < 7:
+            cur['semester'] = 'Q1'
+        else:
+            cur['semester'] = 'Q2'
         cursor = connection.cursor()
         cursor.execute("""
-                    select distinct temp1.uosCode, temp1.semester, temp1.year, temp1.grade
-                    from
-                    (select uosCode, semester, year, grade
+                    select distinct uosCode, semester, year, grade
                     from transcript
-                    where studId = %s and grade is null)temp1,
-                    (select uosCode, semester, year, grade
-                    from transcript
-                    where studId = %s and grade is null)temp2
-                    where temp1.year > temp2.year
-                    and temp1.semester > temp2.semester""", (profile["id"], profile["id"],))
+                    where studId = %s and year = %s
+                    and semester = %s""", (profile["id"], cur['year'], cur['semester'],))
         values = cursor.fetchall()
         print(values)
         cursor.close()
-        #today = datetime.date.today()
         courses = list(map(lambda v: (
             v[0],
             v[0] + "    " + v[1] + "    " + str(v[2]) + "   " + str(v[3])
@@ -116,16 +128,12 @@ def showStudentMenu():
             actions
         ], padding = 1)
         dialog = pt.shortcuts.dialogs.Dialog(
-            title = "Welcome, %s. Today is %s-%s Semester" % (profile["username"], values[0][2], values[0][1]),
+            title = "Welcome, %s. Today is %s-%s-%s %s Semester" % \
+            (profile["username"], values[0][2], today[5:7], today[8:10], values[0][1]),
             body = layout,
             with_background=True)
 
         answer = pt.shortcuts.dialogs._run_dialog(dialog, None)
-        #print(answer)
-        #cur = [year, semester]
-        #cur = [values[0][2], values[0][1]]
-        cur['year'] = values[0][2]
-        cur['semester'] = values[0][1]
         
         if answer == None:
             return
@@ -223,7 +231,8 @@ def showEnrollment():
                 select *
                 from lecture
                 where (year = %s and semester = %s)
-                or (year = %s and semester = %s)""",  \
+                or (year = %s and semester = %s)
+                order by year, semester ASC""",  \
                 (cur['year'], cur['semester'], tempy, tempq, ))
         values = cursor.fetchall()
         #print(values)
@@ -288,7 +297,7 @@ def showEnrollment():
 
                   if exists(select *
                                         from transcript
-                                        where studID = 3213
+                                        where studID = stu_id
                                         and uoscode = lec_code)
                   then
                       set p_out=1;
@@ -394,6 +403,7 @@ def showEnrollment():
 def showWithdraw():
     while True:
         cursor = connection.cursor()
+        '''
         cursor.execute("""
                     select distinct temp1.uosCode, temp1.semester, temp1.year, temp1.grade
                     from
@@ -405,6 +415,12 @@ def showWithdraw():
                     where studId = %s and grade is null)temp2
                     where temp1.year > temp2.year
                     and temp1.semester > temp2.semester""", (profile["id"], profile["id"],))
+        '''
+        cursor.execute("""
+                    select distinct uosCode, semester, year, grade
+                    from transcript
+                    where studId = %s and year = %s
+                    and semester = %s""", (profile["id"], cur['year'], cur['semester'],))
         values = cursor.fetchall()
 
         print(values)
@@ -433,6 +449,25 @@ def showWithdraw():
                 text = 'Do you want to withdraw %s?' % (answer, ))
             
             if confirm:
+                #judge if graded
+                cursor = connection.cursor()
+                cursor.execute("""
+                    select distinct uosCode, semester, year, grade
+                    from transcript
+                    where studId = %s and year = %s
+                    and semester = %s and uosCode = %s
+                    """, (profile["id"], cur['year'], cur['semester'], answer))
+                temp_grade = cursor.fetchall()[0][-1]
+                cursor.close()
+                if temp_grade != None:
+                    pt.shortcuts.message_dialog(
+                    title = "Lecture Withdraw Failed",
+                    text = "You can not drop a class already graded!",
+                    style = pt.styles.Style.from_dict({
+                    "dialog": "bg:#ff0000",
+                    }),)
+                    continue
+                    
                 p_out = 0
                 cursor = connection.cursor()
                 #trigger
@@ -463,7 +498,7 @@ def showWithdraw():
                 drop procedure if exists check_withdraw""")
                 cursor.execute("""
                 create procedure check_withdraw(in lec_code char(8), in stu_id int,
-                                in year_in int, in semester_in char(2), out trigger_val char)
+                                in year_in int, in semester_in char(2), out trigger_val char(8))
                 begin
                       delete from transcript
                       where StudId = stu_id and UoSCode = lec_code
@@ -573,7 +608,7 @@ def showProfile():
 
 if __name__ == "__main__":
     try:
-        connection = mysql.connector.connect(user="root", password="19961226syc", database="project3-nudb", host="localhost", port=3306)
+        connection = mysql.connector.connect(user="root", password="294811", database="project3-nudb", host="localhost", port=3306)
         main()
     except:
         traceback.print_exc()
