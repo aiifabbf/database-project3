@@ -28,12 +28,12 @@ def main():
 # login view
 def showLoginView():
     while True:
-        username = pt.shortcuts.input_dialog(
+        id = pt.shortcuts.input_dialog(
             title="NU Login",
-            text="Username",
+            text="Student ID",
             cancel_text="Quit"
         )
-        if username == None:
+        if id == None: # user pressed quit
             exit()
 
         password = pt.shortcuts.input_dialog(
@@ -41,33 +41,25 @@ def showLoginView():
             text="Password",
             password=True
         )
-        if password == None:
+        if password == None: # user pressed cancel
             continue
-        # username = "Linda Smith"
+        # id = "3213"
         # password = "lunch"
 
         cursor = connection.cursor()
-        cursor.execute("select id, name, password, address from student where student.name = %s and student.password = %s", (username, password))
+        cursor.execute("select id, name, password, address from student where student.id = %s and student.password = %s", (id, password))
         values = cursor.fetchall()
         cursor.close()
 
-        if len(values) == 0:
+        if len(values) == 0 or str(values[0][0]) != id or values[0][2] != password:
             pt.shortcuts.message_dialog(
-                title = "NU Login Error",
-                text = "Wrong username or password",
-                style = pt.styles.Style.from_dict({
+                title="NU Login Error",
+                text="Wrong student ID or password.\nTake care of CASE SENSITIVE!",
+                style=pt.styles.Style.from_dict({
                     "dialog": "bg:#ff0000",
                 }),
             )
             continue
-        elif values[0][1] != username or values[0][2] != password:
-            pt.shortcuts.message_dialog(
-                title = "NU Login Error",
-                text = "Wrong username or password\nTake care of CASE SENSITIVE!",
-                style = pt.styles.Style.from_dict({
-                    "dialog": "bg:#ff0000",
-                }),
-            )
         else:
             profile["id"] = values[0][0]
             profile["username"] = values[0][1]
@@ -85,29 +77,24 @@ def showStudentMenu():
         cur["semester"] = "Q1" if 1 <= today.month <= 6 else "Q2" # [January, June] -> Q1, [July, December] -> Q2
 
         cursor = connection.cursor()
-        # cursor.execute("""
-        #             select distinct temp1.uosCode, temp1.semester, temp1.year, temp1.grade
-        #             from
-        #             (select uosCode, semester, year, grade
-        #             from transcript
-        #             where studId = %s and grade is null)temp1,
-        #             (select uosCode, semester, year, grade
-        #             from transcript
-        #             where studId = %s and grade is null)temp2
-        #             where temp1.year > temp2.year
-        #             and temp1.semester > temp2.semester""", (profile["id"], profile["id"],))
         cursor.execute("""
-                    select distinct uosCode, semester, year, grade
-                    from transcript
-                    where studId = %s and year = %s
-                    and semester = %s""", (profile["id"], cur['year'], cur['semester'],))
+            select distinct uosCode, semester, year, grade
+            from transcript
+            where studId = %s and year = %s
+            and semester = %s
+        """, (profile["id"], cur['year'], cur['semester']))
         values = cursor.fetchall()
         cursor.close()
 
         # build gui
         courses = list(map(lambda v: (
-            v[0],
-            v[0] + "    " + v[1] + "    " + str(v[2]) + "   " + str(v[3] or "N/A")
+            v[0], # course id
+            "   ".join([
+                v[0], # course id
+                v[1], # semester
+                str(v[2]), # year
+                str(v[3] or "N/A"), # grade
+            ]),
         ), values))
 
         label = pt.widgets.Label("Your %s-%s semester courses" % (cur["year"], cur["semester"]))
@@ -116,29 +103,26 @@ def showStudentMenu():
             pt.widgets.Button("Transcript", lambda: handler("transcript")),
             pt.widgets.Button("Enroll", lambda: handler("enroll")),
             pt.widgets.Button("Withdraw", lambda: handler("withdraw")),
-            pt.widgets.Button("Personal Details", lambda: handler("profile"), width = 20),
-            pt.widgets.Button("Log out", lambda: handler("logout"))
+            pt.widgets.Button("Personal Details", lambda: handler("profile"), width=20),
+            pt.widgets.Button("Log out", lambda: handler("logout")),
         ])
 
         layout = pt.layout.VSplit([
             pt.layout.HSplit([
                 label,
-                radioList
+                radioList,
             ], padding=1),
             actions,
         ], padding=1)
 
         dialog = pt.shortcuts.dialogs.Dialog(
-            # title = "Welcome, %s. Today is %s-%s Semester" % (profile["username"], values[0][2], values[0][1]),
-            title = "Welcome, %s. Today is %s-%s-%s" % (profile["username"], cur["year"], cur["month"], cur["day"]),
-            body = layout,
+            title="Welcome, %s. Today is %s-%s-%s" % (profile["username"], cur["year"], cur["month"], cur["day"]),
+            body=layout,
             with_background=True)
 
         answer = pt.shortcuts.dialogs._run_dialog(dialog, None)
-        
-        if answer == None:
-            return
-        elif answer == "transcript":
+
+        if answer == "transcript":
             showTranscript()
         elif answer == "enroll":
             showEnrollment()
@@ -146,7 +130,7 @@ def showStudentMenu():
             showProfile()
         elif answer == "withdraw":
             showWithdraw()
-        else:
+        else: # user pressed logout
             return
 
 def showTranscript():
@@ -156,9 +140,15 @@ def showTranscript():
         values = cursor.fetchall()
         cursor.close()
 
-        courses = list(map(lambda v: (
+        values.sort(key=lambda v: (v[2], v[1]), reverse=True) # sort by year, semester descending
+        courses = list(map(lambda v: ( 
             v[0],
-            v[0] + "    " + v[1] + "    " + str(v[2]) + "   " + str(v[3] or "N/A")
+            "   ".join([
+                v[0], # course id
+                v[1], # semester
+                str(v[2]), # year
+                str(v[3] or "N/A"), # grade
+            ]),
         ), values))
 
         answer = pt.shortcuts.radiolist_dialog(
@@ -199,10 +189,9 @@ def showCourseDetail(courseId: str):
 
     cursor.close()
 
-    # print(courseId, courseName, year, semester, enrollment, maxEnrollment, instructorName)
     answer = pt.shortcuts.message_dialog(
-        title = "%s: %s" % (courseId, courseName),
-        text = pt.HTML("""
+        title="%s: %s" % (courseId, courseName),
+        text=pt.HTML("""
             <b>course id</b> %s \n
             <b>course name</b> %s \n
             <b>year</b> %d \n
@@ -460,7 +449,7 @@ def showWithdraw():
                     "dialog": "bg:#ff0000",
                     }),)
                     continue
-                    
+
                 p_out = 0
                 cursor = connection.cursor()
                 #trigger
@@ -601,7 +590,7 @@ def showProfile():
 
 if __name__ == "__main__":
     try:
-        connection = mysql.connector.connect(user="root", password="294811", database="project3-nudb", host="localhost", port=3306)
+        connection = mysql.connector.connect(user="root", password="19961226syc", database="project3-nudb", host="localhost", port=3306)
         main()
     except:
         traceback.print_exc()
