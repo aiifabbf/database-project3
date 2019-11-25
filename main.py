@@ -219,7 +219,7 @@ def showEnrollment():
     while True:
         cursor = connection.cursor()
         cursor.execute("""
-            select distinct uosCode, semester, year
+            select distinct uosCode, semester, year, classTime, classroomId
             from lecture
             where (year = %s and semester = %s)
             or (year = %s and semester = %s)
@@ -229,14 +229,20 @@ def showEnrollment():
         values = cursor.fetchall()
         cursor.close()
 
-        courses = list(map(lambda v: (
-            (v[0], v[1], str(v[2])), # course id, semester, year
-            "   ".join([
-                v[0], # course id
-                v[1], # semester
-                str(v[2]), # year
-            ]),
-        ), values))
+        courseTimeLocationMapping = {}
+
+        for v in values:
+            course = (v[0], v[1], str(v[2]))
+            classTime = v[3]
+            classroomId = v[4]
+
+            if course in courseTimeLocationMapping:
+                courseTimeLocationMapping[course].append((classTime, classroomId))
+            else:
+                courseTimeLocationMapping[course] = [(classTime, classroomId)]
+
+        keys = sorted(courseTimeLocationMapping.keys(), key=lambda k: (k[2], k[1]), reverse=True)
+        courses = list((k, "    ".join(k) + "   " + ", ".join(time + " @ " + id for time, id in courseTimeLocationMapping[k])) for k in keys)
 
         answer = pt.shortcuts.radiolist_dialog(
             title="%s-%s and %s-%s Courses" % (cur['year'], cur['semester'], nextYear, nextSemester),
