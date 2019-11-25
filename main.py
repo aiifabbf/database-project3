@@ -394,18 +394,32 @@ def showEnrollment():
 
 def showWithdraw():
     while True:
+        if cur['semester'] == "Q2":
+            nextYear = cur['year'] + 1
+            nextSemester = "Q1"
+        elif cur['semester'] == "Q1":
+            nextYear = cur['year']
+            nextSemester = "Q2"
+
         cursor = connection.cursor()
         cursor.execute("""
             select distinct uosCode, semester, year, grade
             from transcript
-            where studId = %s and year = %s
-            and semester = %s
-        """, (profile["id"], cur['year'], cur['semester'],))
+            where
+                studId = %s
+                and (
+                    (year = %s and semester = %s)
+                    or (year = %s and semester = %s)
+                )
+                and grade is null
+        """, (profile["id"], cur['year'], cur['semester'], nextYear, nextSemester))
+        # Students can only withdraw from a unit that they have not finished so far (i.e. grade is NULL).
+        # TA says students can only withdraw from unfinished (this semester or next semesters) courses
         values = cursor.fetchall()
         cursor.close()
 
         courses = list(map(lambda v: (
-            v[0], # course id
+            (v[0], v[1], str(v[2])), # course id, semester, year
             "   ".join([
                 v[0], # course id
                 v[1], # semester
@@ -415,31 +429,32 @@ def showWithdraw():
         ), values))
 
         answer = pt.shortcuts.radiolist_dialog(
-            title="%s-%s Lecture" % (cur['year'], cur['semester']),
-            text="Lectures you have chosen for this semester are listed",
+            title="Withdraw Lecture",
+            text="You can only withdraw unfinished courses for this semester or next semester.",
             ok_text="Withdraw",
             cancel_text="Return",
             values=courses
         )
 
-        if answer == None:
+        if answer == None: # user pressed return
             return
         else:
-            #print(answer)
+            courseId, semester, year = answer
+
             confirm = pt.shortcuts.yes_no_dialog(
                 title='Confirm',
-                text='Do you want to withdraw %s?' % (answer, ),
+                text='Do you want to withdraw %s (%s %s)?' % (courseId, semester, year),
             )
 
             if confirm:
-                #judge if graded
+                # judge if graded
                 cursor = connection.cursor()
                 cursor.execute("""
                     select distinct uosCode, semester, year, grade
                     from transcript
                     where studId = %s and year = %s
                     and semester = %s and uosCode = %s
-                """, (profile["id"], cur['year'], cur['semester'], answer))
+                """, (profile["id"], year, semester, courseId))
                 temp_grade = cursor.fetchall()[0][-1]
                 cursor.close()
                 if temp_grade != None:
@@ -481,45 +496,49 @@ def showWithdraw():
                 cursor.execute("""
                 drop procedure if exists check_withdraw""")
                 cursor.execute("""
-                create procedure check_withdraw(in lec_code char(8), in stu_id int,
-                                in year_in int, in semester_in char(2), out trigger_val char(8))
+                create procedure check_withdraw(in lec_code char(8), in stu_id int, in year_in int, in semester_in char(2), out trigger_val char(8))
                 begin
-                      delete from transcript
-                      where StudId = stu_id and UoSCode = lec_code
-                      and Semester = semester_in and year = year_in;
+                    delete from transcript
+                    where StudId = stu_id and UoSCode = lec_code
+                    and Semester = semester_in and year = year_in;
 
-                      update uosoffering
-                        set enrollment = enrollment - 1
-                        where uoscode = lec_code
-                        and year = year_in
-                        and semester = semester_in;
+                    update uosoffering
+                    set enrollment = enrollment - 1
+                    where uoscode = lec_code
+                    and year = year_in
+                    and semester = semester_in;
 
-                      select semester
-                      into trigger_val
-                      from whenoffered
-                      where uoscode = 'test';
+                    select semester
+                    into trigger_val
+                    from whenoffered
+                    where uoscode = 'test';
 
-                      delete from whenoffered
-                      where uoscode = 'test';
+                    delete from whenoffered
+                    where uoscode = 'test';
                 end""")
-                args = (answer, profile['id'], cur['year'], cur['semester'], p_out)
-                args = cursor.callproc(
-                'check_withdraw', args)
+                # Implement this part using stored procedures and call it from your database client program.
+                args = (courseId, profile['id'], year, semester, p_out)
+                args = cursor.callproc('check_withdraw', args)
                 connection.commit()
                 cursor.close()
+
                 if args[-1] == 'T':
                     pt.shortcuts.message_dialog(
-                    title = "Lecture Withdraw Warning",
-                    text = "Lecture %s now contains less than half MaxEnrollment!" % (answer, ),
-                    style = pt.styles.Style.from_dict({
-                        "dialog": "bg:#ffff00",
-                    }),)
+                        title="Lecture Withdraw Warning",
+                        text="Lecture %s (%s %s) now contains less than half MaxEnrollment!" % (courseId, semester, year),
+                        style=pt.styles.Style.from_dict({
+                            "dialog": "bg:#ffff00",
+                        }),
+                    )
+                    # If the Enrollment number goes below 50% of the MaxEnrollment, then a warning message should be shown on the screen.
+
                 pt.shortcuts.message_dialog(
-                    title = "Lecture Withdraw Succeed",
-                    text = "Congratulations! You have withdrawn from %s successfully!" % (answer, ),
-                    style = pt.styles.Style.from_dict({
-                    "dialog": "bg:#00ff00",
-                    }),)
+                    title="Lecture Withdraw Succeed",
+                    text="Congratulations! You have withdrawn from %s (%s %s) successfully!" % (courseId, semester, year),
+                    style=pt.styles.Style.from_dict({
+                        "dialog": "bg:#00ff00",
+                    }),
+                )
 
 # personal details
 def showProfile():
