@@ -419,7 +419,6 @@ def showWithdraw():
                     (year = %s and semester = %s)
                     or (year = %s and semester = %s)
                 )
-                and grade is null
         """, (profile["id"], cur['year'], cur['semester'], nextYear, nextSemester))
         # Students can only withdraw from a unit that they have not finished so far (i.e. grade is NULL).
         # TA says students can only withdraw from unfinished (this semester or next semesters) courses
@@ -624,7 +623,7 @@ def showProfile():
 
 if __name__ == "__main__":
     try:
-        connection = mysql.connector.connect(user="root", password="19961226syc", database="project3-nudb", host="localhost", port=3306)
+        connection = mysql.connector.connect(user="root", password="294811", database="project3-nudb", host="localhost", port=3306)
         main()
     except:
         traceback.print_exc()
