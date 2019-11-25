@@ -316,6 +316,8 @@ def showEnrollment():
                 else
                     set p_out = 4;
 
+                    start transaction;
+
                     insert into transcript
                     values(stu_id, lec_code, semester_in, year_in, null);
 
@@ -324,10 +326,13 @@ def showEnrollment():
                     where uoscode = lec_code
                     and year = year_in
                     and semester = semester_in;
+
+                    commit;
                 end if;
                 select @p_out;
                 end""")
                 # On successful enrollment, a new entry in the Transcript table shall be created with a NULL grade, plus the Enrollment attribute of the corresponding course shall be increased by one.
+                # All database modifications (such as course enrolling / withdrawing or student update) shall be implemented as well-defined database transactions.
 
                 args = (p_out, courseId, profile['id'], year, semester)
                 args = cursor.callproc('check_enroll', args)
@@ -515,6 +520,8 @@ def showWithdraw():
                 cursor.execute("""
                 create procedure check_withdraw(in lec_code char(8), in stu_id int, in year_in int, in semester_in char(2), out trigger_val char(8))
                 begin
+                    start transaction;
+
                     delete from transcript
                     where StudId = stu_id and UoSCode = lec_code
                     and Semester = semester_in and year = year_in;
@@ -532,8 +539,11 @@ def showWithdraw():
 
                     delete from whenoffered
                     where uoscode = 'test';
+
+                    commit;
                 end""")
                 # Implement this part using stored procedures and call it from your database client program.
+                # All database modifications (such as course enrolling / withdrawing or student update) shall be implemented as well-defined database transactions.
                 args = (courseId, profile['id'], year, semester, p_out)
                 args = cursor.callproc('check_withdraw', args)
                 connection.commit()
@@ -592,13 +602,13 @@ def showProfile():
             if newAddress == None: # user pressed cancel
                 pass # do nothing
             else:
-                cursor = connection.cursor()
+                cursor = connection.cursor() # implicit transaction, defined by PEP 249. See <https://www.python.org/dev/peps/pep-0249/#commit> and <https://stackoverflow.com/questions/52723251/mysql-connector-python-how-to-use-the-start-transaction-method>
                 cursor.execute("""
                     update student
                     set address = %s
                     where id = %s
                 """, (newAddress, profile["id"]))
-                connection.commit()
+                connection.commit() # commit transaction
                 cursor.close()
         elif answer == "password":
             newPassword = pt.shortcuts.input_dialog(
@@ -622,14 +632,14 @@ def showProfile():
                         set password = %s
                         where id = %s
                     """, (newPassword, profile["id"]))
-                    connection.commit()
+                    connection.commit() # commit transaction
                     cursor.close()
         else: # user pressed return
             return
 
 if __name__ == "__main__":
     try:
-        connection = mysql.connector.connect(user="root", password="294811", database="project3-nudb", host="localhost", port=3306)
+        connection = mysql.connector.connect(user="root", password="19961226syc", database="project3-nudb", host="localhost", port=3306)
         main()
     except:
         traceback.print_exc()
