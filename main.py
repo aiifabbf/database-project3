@@ -98,7 +98,7 @@ def showStudentMenu():
         ), values))
 
         label = pt.widgets.Label("Your %s-%s semester courses" % (cur["year"], cur["semester"]))
-        radioList = pt.widgets.RadioList(courses)
+        radioList = pt.widgets.RadioList(courses) if courses else pt.widgets.Label("(No courses)")
         actions = pt.layout.HSplit([
             pt.widgets.Button("Transcript", lambda: handler("transcript")),
             pt.widgets.Button("Enroll", lambda: handler("enroll")),
@@ -152,11 +152,15 @@ def showTranscript():
         ), values))
 
         answer = pt.shortcuts.radiolist_dialog(
-            title = "%s's transcript" % profile["username"],
-            text = "Select course to see details",
-            ok_text = "See detail",
-            cancel_text = "Return",
-            values = courses
+            title="%s's transcript" % profile["username"],
+            text="Select course to see details",
+            ok_text="See detail",
+            cancel_text="Return",
+            values=courses
+        ) if courses else pt.shortcuts.message_dialog(
+            title="%s's transcript" % profile["username"],
+            text="(No courses)",
+            ok_text="Return",
         )
         if answer == None: # user pressed return
             return
@@ -239,7 +243,11 @@ def showEnrollment():
             text="Courses available for this and next semester are listed",
             ok_text="Select",
             cancel_text="Return",
-            values=courses
+            values=courses,
+        ) if courses else pt.shortcuts.message_dialog(
+            title="%s-%s and %s-%s Courses" % (cur['year'], cur['semester'], nextYear, nextSemester),
+            text="(No courses available at this time)",
+            ok_text="Return",
         )
         if answer == None: # user pressed return
             return
@@ -434,6 +442,10 @@ def showWithdraw():
             ok_text="Withdraw",
             cancel_text="Return",
             values=courses
+        ) if courses else pt.shortcuts.message_dialog(
+            title="Withdraw Lecture",
+            text="You can only withdraw unfinished courses for this semester or next semester.\n\n(No courses to withdraw)",
+            ok_text="Return",
         )
 
         if answer == None: # user pressed return
